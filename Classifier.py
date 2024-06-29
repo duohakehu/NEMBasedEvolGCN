@@ -33,3 +33,6 @@ class Predict(nn.Module):
 
         # x = self.lin2(x)
         return x
+
+    def reset_parameters(self):
+        pass

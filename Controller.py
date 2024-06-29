@@ -32,7 +32,7 @@ class Controller:
             self.ds = self.load_train_data(file_name, self.device, adj_file, feature_file)
         else:
             self.ds = TopologyAwareDataSplite(file_name=file_name, lstm_window=10, device="cpu",
-                                              node_feature=2, edge_feature=1, label_class=1, adj_file=adj_file,
+                                              node_feature=4, edge_feature=1, label_class=1, adj_file=adj_file,
                                               node_num=18, edge_num=28,
                                               feature_file=feature_file)
 
@@ -46,9 +46,6 @@ class Controller:
         # 用于回归的损失函数
         self.loss_MSE_function = torch.nn.MSELoss().to(self.device)
         self.edge_dict = dict()
-        seed = 42
-        self.set_seed(seed)
-        random.seed(seed)
 
     def load_UCIsocial_data(self, filename, device):
         ds = DataSplit(filename, skip_rows=2, device=device)
@@ -63,18 +60,18 @@ class Controller:
 
     def use_cleaned_data_split(self, device, feature, adjs, label):
         self.ds = CleanedDataSplit(lstm_window=6, train=0.7, valid=0.2, device=device,
-                                   node_feature=3, edge_feature=2, label_class=1, node_num=18, edge_num=28,
+                                   node_feature=2, edge_feature=2, label_class=1, node_num=18, edge_num=28,
                                    feature=feature, adjs=adjs, label=label)
 
-    def set_seed(self, seed=42):
-        random.seed(seed)
-        random.seed(seed)
-        os.environ['PYTHONHASHSEED'] = str(seed)
-        torch.manual_seed(seed)
-        torch.cuda.manual_seed(seed)
-        torch.cuda.manual_seed_all(seed)
-        torch.backends.cudnn.deterministic = True
-        torch.backends.cudnn.benchmark = False
+    # def set_seed(self, seed=42):
+    #     random.seed(seed)
+    #     np.random.seed(seed)
+    #     os.environ['PYTHONHASHSEED'] = str(seed)
+    #     torch.manual_seed(seed)
+    #     torch.cuda.manual_seed(seed)
+    #     torch.cuda.manual_seed_all(seed)
+    #     torch.backends.cudnn.deterministic = True
+    #     torch.backends.cudnn.benchmark = False
 
     # def train(self):
     #     self.init_optimizers()
@@ -103,60 +100,63 @@ class Controller:
     #         self.save('./output/model_after_epoch_' + str(epoch) + '.pt')
 
     # 基于NEM提供的数据集业务的连通可用度预测
-    def train_avail(self, test_loss=False):
+    def train_avail(self, lr, test_loss=False):
 
         plotUtil = PlotUtil([], [], "lr", "avg_loss")
         plt.ion()
 
-        def run_thread():
+        def run_thread(lrate, find_lr_mode=False):
+            # total_test_num = 0
+            if find_lr_mode:
+                total_test_num = 1000
+            else:
+                total_test_num = 1
 
-            # torch.autograd.set_detect_anomaly(True)
-            self.init_optimizers()
-            skip = 5
-            best_loss = float('inf')
-            best_model_weight = None
-            epoch_no_improve = 0
-            num = 10000
-            patience = 20
-            for epoch in range(num):
-                self.egcn.train()
-                self.ds.reset()
-                # self.edge_dict.clear()
-                # print('##############Epoch {:03d}#########'.format(epoch))
-                # 每次更新参数前都梯度归零和初始化
-                mask_list = list()
-                out_list = list()
-                train_loss = 0.0
-                for s in self.ds.train_dataLoader:
-                    adj_sparse_list = self.ds.build_sparse_matrix(s.get("adj"))
-                    feature = s.get("feature")
-                    mask = s.get("mask")[-1]
-                    out = self.egcn(feature, adj_sparse_list)
-                    # out_list.append(out)
-                    # mask_list.append(mask)
-                    label = self.ds.label.to(self.device)
-                    label = label.reshape(-1, 1)
-                    # result = torch.cat(out_list).reshape(-1, 1)
-                    # result.requires_grad_()
-                    loss = self.loss_MSE_function(out, label[mask])
-                    self.egcn_optimizer.zero_grad()
-                    loss.backward()
-                    self.optimizers_step()
-                    train_loss += loss.item()
-                self.scheduler.step()
+            for i in range(0, total_test_num):
+                self.egcn.reset_weights()
+                # torch.autograd.set_detect_anomaly(True)
+                self.init_optimizers(lrate)
+                print("lr = " + str(self.egcn_optimizer.param_groups[0]['lr']))
+                lrate = lrate * 0.95
+                skip = 5
+                best_loss = float('inf')
+                best_model_weight = None
+                epoch_no_improve = 0
+                num = 10000
+                patience = 5
+                for epoch in range(num):
+                    self.egcn.train()
+                    self.ds.reset()
+                    # self.edge_dict.clear()
+                    # print('##############Epoch {:03d}#########'.format(epoch))
+                    # 每次更新参数前都梯度归零和初始化
+                    mask_list = list()
+                    out_list = list()
+                    train_loss = 0.0
+                    for s in self.ds.train_dataLoader:
+                        adj_sparse_list = self.ds.build_sparse_matrix(s.get("adj"))
+                        feature = s.get("feature")
+                        mask = s.get("mask")[-1]
+                        out = self.egcn(feature, adj_sparse_list)
+                        # out_list.append(out)
+                        # mask_list.append(mask)
+                        label = self.ds.label.to(self.device)
+                        label = label.reshape(-1, 1)
+                        # result = torch.cat(out_list).reshape(-1, 1)
+                        # result.requires_grad_()
+                        loss = self.loss_MSE_function(out, label[mask])
+                        self.egcn_optimizer.zero_grad()
+                        loss.backward()
+                        self.optimizers_step()
+                        train_loss += loss.item()
+                    self.scheduler.step()
 
-                train_loss = train_loss / len(self.ds.train_dataLoader)
+                    train_loss = train_loss / len(self.ds.train_dataLoader)
 
-                print('Epoch {:03d} loss {:.4f}'.format(epoch, train_loss))
+                    print('Epoch {:03d} loss {:.4f}'.format(epoch, train_loss))
 
-                if test_loss:
-                    plotUtil.update_data(self.egcn_optimizer.param_groups[0]['lr'], train_loss)
-                    print("lr = " + str(self.egcn_optimizer.param_groups[0]['lr']))
-                    continue
-
-                else:
                     # 先自己训练6次在验证
-                    if epoch <= skip:
+                    if epoch <= skip and not find_lr_mode:
                         continue
 
                     self.egcn.eval()
@@ -188,7 +188,11 @@ class Controller:
                         else:
                             epoch_no_improve += 1
 
-                        if epoch_no_improve > patience:
+                        if epoch_no_improve == patience:
+                            if find_lr_mode:
+                                plotUtil.update_data(lrate, valid_loss)
+                                break
+
                             self.save('./output/model_after_epoch_' + str(num) + '.pt')
                             return
 
@@ -196,17 +200,17 @@ class Controller:
                         self.egcn.load_state_dict(best_model_weight)
 
         if test_loss:
-            plotUtil.start_thread(run_thread)
+            plotUtil.start_thread(function=run_thread, args=(lr, test_loss,))
             update_thread = threading.Thread(target=plotUtil.show_figure)
             update_thread.daemon = True
             update_thread.start()
             plt.show(block=True)
         else:
-            run_thread()
+            run_thread(lr, test_loss)
 
-    def init_optimizers(self):
+    def init_optimizers(self, lr):
         # lr=0.01
-        self.egcn_optimizer = torch.optim.Adam(self.egcn.parameters(), lr=0.00651, weight_decay=1e-4)
+        self.egcn_optimizer = torch.optim.Adamax(self.egcn.parameters(), lr=lr, weight_decay=1e-4)
         self.scheduler = torch.optim.lr_scheduler.ExponentialLR(self.egcn_optimizer, gamma=0.9)
 
         # self.classifier_optimizer = torch.optim.Adam(self.classifier.parameters(), lr=0.01, weight_decay=1e-4)

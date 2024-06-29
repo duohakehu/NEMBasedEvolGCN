@@ -46,8 +46,6 @@ class EvolGCN(nn.Module):
         #         nn.init.constant_(m.weight, 0)
         #         nn.init.constant_(m.bias, 0)
 
-
-
     # def build_time_sequence_for_feature(self, feature_list, idx_list):
     #     prepapre_feature_dict = FeatureDict()
     #
@@ -276,6 +274,14 @@ class EvolGCN(nn.Module):
         out = self.predict(out)
 
         return out
+
+    def reset_weights(self):
+        for m in self.modules():
+            if not isinstance(m, (nn.ReLU, nn.ModuleList, nn.Dropout, AdaptiveAvgPool1d)):
+                m.reset_parameters()
+
+    def reset_parameters(self):
+        pass
 
     def gcn(self, x, edge_index):
 

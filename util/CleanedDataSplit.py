@@ -50,6 +50,7 @@ class CleanedDataSplit(DataSplit):
 
         self.start = start
         self.end = end
+        self.node_num = node_num
 
         self.size = (int(node_num), int(node_num))  # Note:这个要根据实际情况实际调整，大小要和稀疏矩阵和特征对应上
 

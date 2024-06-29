@@ -12,7 +12,7 @@ class PlotUtil:
         self.x_data = x_data
         self.y_data = y_data
         self.ax.set_xlim(0, 0.01)
-        self.ax.set_ylim(0, 1)
+        self.ax.set_ylim(0, 0.007)
         self.ax.set_xlabel(x_label)
         self.ax.set_ylabel(y_label)
         self.ax.legend()
@@ -26,8 +26,8 @@ class PlotUtil:
             self.fig.canvas.flush_events()
             time.sleep(1)
 
-    def start_thread(self, function):
-        thread = threading.Thread(target=function)
+    def start_thread(self, function, args):
+        thread = threading.Thread(target=function, args=args)
         thread.daemon = True
         thread.start()
 

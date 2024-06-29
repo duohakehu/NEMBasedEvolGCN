@@ -1,6 +1,9 @@
 import math
+import os
+import random
 import time
 
+import numpy as np
 import torch
 from torch.utils.data import DataLoader
 from torch_geometric.datasets import Planetoid
@@ -57,6 +60,7 @@ def gather_node(adj_sparse, node_feature):
         e_feature_list.append(edge_feature)
     return torch.cat(e_feature_list, dim=1)
 
+
 def run_epocch(model, classifier, ds, device):
     optimizer = torch.optim.Adam(model.parameters(), lr=0.00001, weight_decay=1e-4)
     loss_function = torch.nn.CrossEntropyLoss().to(device)
@@ -81,18 +85,32 @@ def run_epocch(model, classifier, ds, device):
         # print('Epoch {:03d} loss {:.4f}'.format(epoch, loss.item()))
 
 
+def set_seed(seed=42):
+    random.seed(seed)
+    np.random.seed(seed)
+    os.environ['PYTHONHASHSEED'] = str(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
+
 if __name__ == '__main__':
+    set_seed(3047)
     # start = time.time()
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')  # Choose device based on availability
     # controller = Controller('opsahl-ucsocial/test', device)
-    file_name = 'NEMData/network_1/no_repair/networking_1_modify_by_cgn__train_data__2024-06-25 214959.xlsx'
+    # file_name = 'NEMData/network_1/no_repair/networking_1_modify_by_cgn__train_data__2024-06-25 214959.xlsx'
+    file_name = 'NEMData/network_1/repair/networking_1_modify_by_cgn__train_data__r_and_nor.xlsx'
     adj_file = 'NEMData/network_1/no_repair/zx_network_1_dataset_adj_matrix.npy'
     feature_file = 'NEMData/network_1/no_repair/networking_1_modify_by_cgn__feature_data__2024-06-24 205501.xlsx'
+
     controller = Controller(file_name, device, adj_file, feature_file, "NEM")
     # controller.train()
     feature, adjs, label = controller.clean_data(saved=False)
     controller.use_cleaned_data_split(device, feature, adjs, label)
-    controller.train_avail(test_loss=False)
+    controller.train_avail(test_loss=False, lr=0.006302494097246091)
     # data, num_node_features, num_classes = load_data('Cora', device)
     # ds = load_UCIsocial_data('opsahl-ucsocial/out.opsahl-ucsocial', device)
     # ds = load_UCIsocial_data('opsahl-ucsocial/test', device)
