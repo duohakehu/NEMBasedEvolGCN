@@ -36,3 +36,8 @@ class Predict(nn.Module):
 
     def reset_parameters(self):
         pass
+
+    def reset_weights(self):
+        for m in self.modules():
+            if not isinstance(m, (nn.ReLU, nn.ModuleList, nn.Dropout)):
+                m.reset_parameters()

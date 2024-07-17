@@ -12,30 +12,34 @@ from util.FeatureDict import FeatureDict
 
 class EvolGCN(nn.Module):
 
-    def __init__(self, input_dim, output_dim, hidden_dim, num_class, num_layers, device, node_num):
+    def __init__(self, input_dim, output_dim, hidden_dim, num_class, num_layers, device, node_num, extra_dim=0):
         super(EvolGCN, self).__init__()
         self.device = device
         self.hidden_dim = hidden_dim
         # self.node_feature_weight = nn.Embedding(input_channel, node_em_dim)
+        self.pr_emb_lstm = LSTM(input_size=node_num, hidden_size=hidden_dim, num_layers=num_layers, batch_first=True)
         self.lstm = LSTM(input_size=node_num, hidden_size=hidden_dim, num_layers=num_layers, batch_first=True)
         # self.stack_lin = Linear(in_features=input_dim, out_features=hidden_dim)
         self.mlp = MLP(in_channels=hidden_dim, out_channels=node_num, hidden_channels=hidden_dim,
                        num_layers=num_layers)
+        self.emb_mlp = MLP(in_channels=hidden_dim, out_channels=node_num, hidden_channels=hidden_dim,
+                           num_layers=num_layers)
         # self.weight = nn.Embedding(num_embeddings= input_data_size, embedding_dim=input_dim).weight.data
-        self.gcn_conv = GCNConv(input_dim, output_dim)
+        self.gcn_conv = GCNConv(input_dim + extra_dim, output_dim + extra_dim)
         # self.gcn_conv.reset_parameters()  # 初始化权重
         # self.weight = self.gcn_conv.lin.weight.data.to(self.device)
         self.reLu = ReLU()
-        self.cmlp = MLP(in_channels=input_dim, out_channels=output_dim, hidden_channels=hidden_dim,
-                        num_layers=num_layers)
+        self.cmlp = MLP(in_channels=input_dim + extra_dim, out_channels=output_dim + extra_dim,
+                        hidden_channels=hidden_dim, num_layers=num_layers)
 
         self.feature_recent_dict = FeatureDict()
-        self.feature_linear = nn.Linear(in_features=input_dim * 2, out_features=output_dim)
-        self.lin = nn.Linear(input_dim, input_dim)
+        # self.feature_linear = nn.Linear(in_features=input_dim * 2, out_features=output_dim)
+        self.lin = nn.Linear(input_dim + extra_dim, input_dim + extra_dim)
         # self.lin_p = nn.Linear(node_num, num_class)
-        self.predict = Predict(input_dim * node_num, num_class)
+        self.predict = Predict((input_dim + extra_dim) * node_num, num_class)
         # 全局池化
         self.global_avg_pool = AdaptiveAvgPool1d(num_class)
+        self.extra_dim = extra_dim
         #
         # for m in self.modules():
         #     if isinstance(m, GCNConv):
@@ -235,17 +239,43 @@ class EvolGCN(nn.Module):
     #     x = self.gcn(x, edge_index)
     #
     #     return x
-
-    def forward(self, fea, edge_list):
+    def pre_embedding_with_data_with_extra_feature(self, fea, extra_fea):
         result = list()
-        # for feature_data, edge_index in zip(fea, edge_list):
-        #     feature_data = feature_data.reshape(-1, feature_data.size(-1)).to(device=self.device)
-        #     x = self.gcn(feature_data, edge_index)
-        #     result.append(x)
+        emb_list = list()
+        for extra_fea_data in extra_fea:
+            result.clear()
+            for sequence_feature in extra_fea_data:
+                x = sequence_feature.reshape(-1, sequence_feature.size(-1)).to(device=self.device)
+                result.append(x)
+            x = DataUtil.pre_deal_feature(result)
+            h_t, (hn, cn) = self.pr_emb_lstm(x)
+            hn = hn.reshape(-1, self.hidden_dim)
+            emb = self.emb_mlp(hn)
+            emb = emb.transpose(0, 1)
+            emb_list.append(emb)
 
+            # 将处理后的特征cat到fea中，组成新的特征张量
+        data_list = list()
+        for fea_data, emb_data in zip(fea, emb_list):
+            feature = torch.cat((fea_data, emb_data), dim=-1)
+            data_list.append(feature)
+        # out = DataUtil.pre_deal_feature(data_list)
+        return data_list
+
+    def forward(self, fea, edge_list, extra_fea=None):
+
+        result = list()
         for feature_data in fea:
             x = feature_data.reshape(-1, feature_data.size(-1)).to(device=self.device)
             result.append(x)
+
+        if self.extra_dim > 0:
+            if extra_fea is None:
+                print(Exception("extra_fea is necessary !"))
+                return None
+            # 这里仅对extra_feature做lstm
+            result = self.pre_embedding_with_data_with_extra_feature(result, extra_fea)
+
         x = DataUtil.pre_deal_feature(result)
         # x = prepare_feature_dict.get(idx_key)
         # if self.cell is None:
@@ -279,6 +309,8 @@ class EvolGCN(nn.Module):
         for m in self.modules():
             if not isinstance(m, (nn.ReLU, nn.ModuleList, nn.Dropout, AdaptiveAvgPool1d)):
                 m.reset_parameters()
+
+        self.predict.reset_weights()
 
     def reset_parameters(self):
         pass

@@ -7,12 +7,13 @@ class DataUtil:
 
     @staticmethod
     def get_list_from_string(content: str):
-        edg_list = list()
+        com_list = list()
         tmp = content.replace('[(', '').replace(')]', '').replace('), (', '-')
         for item in tmp.split('-'):
-            item_tuple = tuple(map(np.int32, item.split(', ')))
-            edg_list.append(item_tuple)
-        return edg_list
+            item = list(filter(None, item.split(',')))  # 忽略空字符串
+            item_tuple = tuple(map(np.int32, item))
+            com_list.append(item_tuple)
+        return com_list
 
     @staticmethod
     def pre_deal_feature(fea):

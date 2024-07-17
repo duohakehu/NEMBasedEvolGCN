@@ -102,15 +102,16 @@ if __name__ == '__main__':
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')  # Choose device based on availability
     # controller = Controller('opsahl-ucsocial/test', device)
     # file_name = 'NEMData/network_1/no_repair/networking_1_modify_by_cgn__train_data__2024-06-25 214959.xlsx'
-    file_name = 'NEMData/network_1/repair/networking_1_modify_by_cgn__train_data__r_and_nor.xlsx'
+    file_name = 'NEMData/network_1/repair/networking_1_modify_by_cgn__train_data__with_sequence.xlsx'
     adj_file = 'NEMData/network_1/no_repair/zx_network_1_dataset_adj_matrix.npy'
     feature_file = 'NEMData/network_1/no_repair/networking_1_modify_by_cgn__feature_data__2024-06-24 205501.xlsx'
 
     controller = Controller(file_name, device, adj_file, feature_file, "NEM")
     # controller.train()
     feature, adjs, label = controller.clean_data(saved=False)
-    controller.use_cleaned_data_split(device, feature, adjs, label)
-    controller.train_avail(test_loss=False, lr=0.006302494097246091)
+    controller.use_cleaned_data_split(device, feature, adjs, label, controller.ds.sequence_info)
+    # 备选1：3.5249975523875253e-06 备选2：0.00463291230159753
+    controller.train_avail(test_loss=False, lr=0.01)
     # data, num_node_features, num_classes = load_data('Cora', device)
     # ds = load_UCIsocial_data('opsahl-ucsocial/out.opsahl-ucsocial', device)
     # ds = load_UCIsocial_data('opsahl-ucsocial/test', device)

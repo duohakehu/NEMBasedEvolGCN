@@ -38,18 +38,19 @@ class TopologyAwareDataSplite:
         self.device = device
 
         # 获取feature文件的数据
-        df = pd.read_excel(feature_file, engine="openpyxl")
-        feature_array = df.to_numpy()
+        # df = pd.read_excel(feature_file, engine="openpyxl")
+        # feature_array = df.to_numpy()
 
         all_feature_tensor = torch.zeros(self.node_num + self.edge_num, node_feature)
         self.node_feature_tensor = all_feature_tensor[0:self.node_num]
-        self.edge_feature_tensor = all_feature_tensor[self.node_num: self.node_num + self.edge_num]
-        self.edge_index_dict = {feature_array[index, 2]: index - self.node_num for index in
-                                range(self.node_num, feature_array[:, 0].size)}
+        # self.edge_feature_tensor = all_feature_tensor[self.node_num: self.node_num + self.edge_num]
+        # self.edge_index_dict = {feature_array[index, 2]: index - self.node_num for index in
+        #                         range(self.node_num, feature_array[:, 0].size)}
 
         # 切分数据集作为测试数据集、验证数据集、和测试数据集
         self.data_length = len(self.data)
-        self.data = self.normalize_array_by_column(self.data, range(0, np.int32(self.node_num * node_feature)))
+        dim = np.int32(self.node_num * node_feature)
+        self.data = self.normalize_array_by_column(self.data, range(0, dim))
         label = self.data[:, 1].astype(np.float32)
         self.all_label = label
         self.data = self.data[:, 1:self.data.shape[1]]
@@ -58,6 +59,14 @@ class TopologyAwareDataSplite:
         self.feature = torch.zeros((self.node_num, self.node_feature), dtype=torch.float32)
 
         self.feature[:, 1: self.feature.size(-1)] = self.node_feature_tensor[:, 1: self.feature.size(-1)]
+
+        # 从数据集中读取故障序列信息，如果没有就设置为None
+        self.sequence_info = None
+        self.node_extra_feature = 0
+
+        if self.data.shape[1] > dim:
+            self.sequence_info = self.data[:, dim:self.data.shape[1]].astype(str)
+            self.node_extra_feature = self.sequence_info.shape[1]
 
     def get_max_node(self):
         return np.max(self.data[:, 0])

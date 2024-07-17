@@ -1,3 +1,4 @@
+import copy
 import os
 import random
 import threading
@@ -36,8 +37,9 @@ class Controller:
                                               node_num=18, edge_num=28,
                                               feature_file=feature_file)
 
-        self.egcn = EvolGCN(self.ds.node_feature, self.ds.node_feature, 64, 1, 1,
-                            self.device, self.ds.node_num).to(self.device)
+        self.egcn = EvolGCN(self.ds.node_feature,
+                            self.ds.node_feature, 64, 1, 1,
+                            self.device, self.ds.node_num, self.ds.node_extra_feature).to(self.device)
         # 如果是链路预测，这里的参数又不一样
         # self.classifier = Classifier(2, 1).to(device)
         # self.predict = Predict(self.ds.node_num, 1).to(self.device)
@@ -46,6 +48,7 @@ class Controller:
         # 用于回归的损失函数
         self.loss_MSE_function = torch.nn.MSELoss().to(self.device)
         self.edge_dict = dict()
+        self.initial_state_dict = copy.deepcopy(self.egcn.state_dict())
 
     def load_UCIsocial_data(self, filename, device):
         ds = DataSplit(filename, skip_rows=2, device=device)
@@ -58,10 +61,10 @@ class Controller:
 
         return ds
 
-    def use_cleaned_data_split(self, device, feature, adjs, label):
+    def use_cleaned_data_split(self, device, feature, adjs, label, extra=None):
         self.ds = CleanedDataSplit(lstm_window=6, train=0.7, valid=0.2, device=device,
                                    node_feature=2, edge_feature=2, label_class=1, node_num=18, edge_num=28,
-                                   feature=feature, adjs=adjs, label=label)
+                                   feature=feature, adjs=adjs, label=label, extra_info=extra)
 
     # def set_seed(self, seed=42):
     #     random.seed(seed)
@@ -113,7 +116,10 @@ class Controller:
                 total_test_num = 1
 
             for i in range(0, total_test_num):
-                self.egcn.reset_weights()
+                # 将模型权重设置为初始值，代替reset_weights()
+                self.egcn.load_state_dict(self.initial_state_dict)
+                # self.egcn.reset_weights()
+                # print(self.egcn.state_dict())
                 # torch.autograd.set_detect_anomaly(True)
                 self.init_optimizers(lrate)
                 print("lr = " + str(self.egcn_optimizer.param_groups[0]['lr']))
@@ -137,7 +143,8 @@ class Controller:
                         adj_sparse_list = self.ds.build_sparse_matrix(s.get("adj"))
                         feature = s.get("feature")
                         mask = s.get("mask")[-1]
-                        out = self.egcn(feature, adj_sparse_list)
+                        extra_feature = s.get("extra_feature")
+                        out = self.egcn(feature, adj_sparse_list, extra_feature)
                         # out_list.append(out)
                         # mask_list.append(mask)
                         label = self.ds.label.to(self.device)
@@ -156,7 +163,7 @@ class Controller:
                     print('Epoch {:03d} loss {:.4f}'.format(epoch, train_loss))
 
                     # 先自己训练6次在验证
-                    if epoch <= skip and not find_lr_mode:
+                    if epoch <= skip:
                         continue
 
                     self.egcn.eval()
@@ -168,8 +175,8 @@ class Controller:
                             adj_sparse_list = self.ds.build_sparse_matrix(s.get("adj"))
                             feature = s.get("feature")
                             mask = s.get("mask")[-1]
-
-                            out = self.egcn(feature, adj_sparse_list)
+                            extra_feature = s.get("extra_feature")
+                            out = self.egcn(feature, adj_sparse_list, extra_feature)
                             # out_list.append(out)
                             # mask_list.append(mask)
                             label = self.ds.valid_label.to(self.device)
@@ -190,7 +197,7 @@ class Controller:
 
                         if epoch_no_improve == patience:
                             if find_lr_mode:
-                                plotUtil.update_data(lrate, valid_loss)
+                                plotUtil.update_data(lrate, best_loss)
                                 break
 
                             self.save('./output/model_after_epoch_' + str(num) + '.pt')
@@ -304,8 +311,9 @@ class Controller:
             # idx_list = s.get("feature_idx")
             # label = s.get("label")
             mask = s.get("mask")[-1]
+            extra_feature = s.get("extra_feature")
             # label = label.reshape(label.size(-1), -1)
-            out = self.egcn(feature, adj_sparse_list)
+            out = self.egcn(feature, adj_sparse_list, extra_feature)
             # edge_feature, mask = self.gather_node(node_feature, node_mask)
             # node_feature = node_feature.view(1, self.ds.node_num)
             # out = self.predict(node_feature)
