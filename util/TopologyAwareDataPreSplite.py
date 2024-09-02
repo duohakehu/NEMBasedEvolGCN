@@ -1,4 +1,5 @@
 import copy
+import json
 import multiprocessing
 
 import networkx
@@ -22,9 +23,13 @@ class TopologyAwareDataSplite:
 
         if adj_file is None:
             return
-        self.adj_matrix = np.load(adj_file)
-        self.G = nx.from_numpy_array(self.adj_matrix)
-        self.G = self.G.to_undirected()
+        if adj_file.split('.')[1] != 'json':
+            self.adj_matrix = np.load(adj_file)
+            self.G = nx.from_numpy_array(self.adj_matrix)
+            self.G = self.G.to_undirected()
+        else:
+            with open(adj_file, 'r') as json_file:
+                self.G = json.load(json_file)
 
         self.node_num = node_num
         self.edge_num = edge_num
@@ -111,15 +116,19 @@ class TopologyAwareDataSplite:
         for i in range(0, data_length):
             feature = self.feature.clone()
 
-            tmp_coo = nx.to_scipy_sparse_array(self.G, format='coo')
+            if isinstance(self.G, networkx.Graph):
+                tmp_coo = nx.to_scipy_sparse_array(self.G, format='coo')
 
-            values = tmp_coo.data
-            indices = np.vstack((tmp_coo.row, tmp_coo.col))
-            index = torch.LongTensor(indices)
-            v = torch.LongTensor(values)
-            # # 这里先不转换为稀疏矩阵，不然dataloader会报错
-            edge_index = {"idx": index, "value": v}
-            adj_sample.append(edge_index)
+                values = tmp_coo.data
+                indices = np.vstack((tmp_coo.row, tmp_coo.col))
+                index = torch.LongTensor(indices)
+                v = torch.LongTensor(values)
+                # # 这里先不转换为稀疏矩阵，不然dataloader会报错
+                edge_index = {"idx": index, "value": v}
+                adj_sample.append(edge_index)
+
+            else:
+                adj_sample.append(self.G.get(str(i)))
 
             for node_index in range(self.node_num):
                 for feature_index in range(self.node_feature):

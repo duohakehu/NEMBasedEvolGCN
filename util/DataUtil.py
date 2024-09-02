@@ -1,3 +1,6 @@
+import base64
+import pickle
+
 import numpy as np
 import pandas as pd
 import torch
@@ -10,8 +13,12 @@ class DataUtil:
         com_list = list()
         tmp = content.replace('[(', '').replace(')]', '').replace('), (', '-')
         for item in tmp.split('-'):
+
             item = list(filter(None, item.split(',')))  # 忽略空字符串
-            item_tuple = tuple(map(np.int32, item))
+            try:
+                item_tuple = tuple(map(np.int32, item))
+            except ValueError:
+                item_tuple = tuple(map(str, item[0].replace("\'", '')))
             com_list.append(item_tuple)
         return com_list
 
@@ -80,3 +87,9 @@ class DataUtil:
         writer = pd.ExcelWriter(file_name)
         df = pd.DataFrame(adj_arr)
         df.to_excel(writer, index=False)
+
+    @staticmethod
+    def decode_matrix_from_base64(bas64_str):
+        binary_matrix = base64.b64decode(bas64_str)
+        matrix = pickle.loads(binary_matrix)
+        return matrix

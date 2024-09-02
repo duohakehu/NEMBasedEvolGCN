@@ -26,6 +26,7 @@ class EvolGCN(nn.Module):
                            num_layers=num_layers)
         # self.weight = nn.Embedding(num_embeddings= input_data_size, embedding_dim=input_dim).weight.data
         self.gcn_conv = GCNConv(input_dim + extra_dim, output_dim + extra_dim)
+        self.pre_lstm_conv = GCNConv(extra_dim, extra_dim)
         # self.gcn_conv.reset_parameters()  # 初始化权重
         # self.weight = self.gcn_conv.lin.weight.data.to(self.device)
         self.reLu = ReLU()
@@ -36,7 +37,7 @@ class EvolGCN(nn.Module):
         # self.feature_linear = nn.Linear(in_features=input_dim * 2, out_features=output_dim)
         self.lin = nn.Linear(input_dim + extra_dim, input_dim + extra_dim)
         # self.lin_p = nn.Linear(node_num, num_class)
-        self.predict = Predict((input_dim + extra_dim) * node_num, num_class)
+        self.predict = Predict((input_dim + extra_dim)*node_num, num_class)
         # 全局池化
         self.global_avg_pool = AdaptiveAvgPool1d(num_class)
         self.extra_dim = extra_dim
@@ -239,13 +240,15 @@ class EvolGCN(nn.Module):
     #     x = self.gcn(x, edge_index)
     #
     #     return x
-    def pre_embedding_with_data_with_extra_feature(self, fea, extra_fea):
+    def pre_embedding_with_data_with_extra_feature(self, fea, extra_fea, edge_list=None):
         result = list()
         emb_list = list()
-        for extra_fea_data in extra_fea:
+        for i, extra_fea_data in enumerate(extra_fea):
             result.clear()
-            for sequence_feature in extra_fea_data:
+            for j, sequence_feature in enumerate(extra_fea_data):
                 x = sequence_feature.reshape(-1, sequence_feature.size(-1)).to(device=self.device)
+                if edge_list is not None:
+                    x = self.pre_lstm_conv(x, edge_list[i][j])
                 result.append(x)
             x = DataUtil.pre_deal_feature(result)
             h_t, (hn, cn) = self.pr_emb_lstm(x)
@@ -274,7 +277,10 @@ class EvolGCN(nn.Module):
                 print(Exception("extra_fea is necessary !"))
                 return None
             # 这里仅对extra_feature做lstm
-            result = self.pre_embedding_with_data_with_extra_feature(result, extra_fea)
+            if isinstance(edge_list[0], list) and edge_list[0] is not None:
+                result = self.pre_embedding_with_data_with_extra_feature(result, extra_fea, edge_list)
+            else:
+                result = self.pre_embedding_with_data_with_extra_feature(result, extra_fea)
 
         x = DataUtil.pre_deal_feature(result)
         # x = prepare_feature_dict.get(idx_key)
@@ -288,7 +294,10 @@ class EvolGCN(nn.Module):
         # x = torch.cat([h_t[-1]], dim=-1)
         out = self.mlp(hn)
         out = out.transpose(0, 1)
-        out = self.gcn(out, edge_list[-1])
+        if isinstance(edge_list[0], list) and edge_list[0] is not None:
+            out = self.gcn(out, edge_list[-1][-1])
+        else:
+            out = self.gcn(out, edge_list[-1])
         # 更新节点特征作为下一次使用
         # self.feature_recent_dict[idx_key] = data
         # # 更新到下一步进行图卷积的特征矩阵中

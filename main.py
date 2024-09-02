@@ -61,28 +61,28 @@ def gather_node(adj_sparse, node_feature):
     return torch.cat(e_feature_list, dim=1)
 
 
-def run_epocch(model, classifier, ds, device):
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.00001, weight_decay=1e-4)
-    loss_function = torch.nn.CrossEntropyLoss().to(device)
-    model.train()
-    for epoch in range(10):
-        print('##############Epoch {:03d}#########'.format(epoch))
-        # 每次更新参数前都梯度归零和初始化
-        optimizer.zero_grad()
-        model.clear()
-        for s in ds.train_dataLoader:
-            adj_sparse_list = ds.build_sparse_matrix(s.get("adj"))
-            # feature = feature.view(1, -1, -1) #lstm batch_first
-            feature = s.get("feature")
-            idx_list = s.get("feature_idx")
-            node_feature = model(feature, idx_list, adj_sparse_list)
-            edge_feature = gather_node(adj_sparse_list[-1], node_feature)
-            out = classifier(edge_feature)
-            # loss = loss_function(out[data.train_mask], data.y[data.train_mask])
-            # loss.backward()
-            # optimizer.step()
-
-        # print('Epoch {:03d} loss {:.4f}'.format(epoch, loss.item()))
+# def run_epocch(model, classifier, ds, device):
+#     optimizer = torch.optim.Adam(model.parameters(), lr=0.00001, weight_decay=1e-4)
+#     loss_function = torch.nn.CrossEntropyLoss().to(device)
+#     model.train()
+#     for epoch in range(10):
+#         print('##############Epoch {:03d}#########'.format(epoch))
+#         # 每次更新参数前都梯度归零和初始化
+#         optimizer.zero_grad()
+#         model.clear()
+#         for s in ds.train_dataLoader:
+#             adj_sparse_list = ds.build_sparse_matrix(s.get("adj"))
+#             # feature = feature.view(1, -1, -1) #lstm batch_first
+#             feature = s.get("feature")
+#             idx_list = s.get("feature_idx")
+#             node_feature = model(feature, idx_list, adj_sparse_list)
+#             edge_feature = gather_node(adj_sparse_list[-1], node_feature)
+#             out = classifier(edge_feature)
+#             # loss = loss_function(out[data.train_mask], data.y[data.train_mask])
+#             # loss.backward()
+#             # optimizer.step()
+#
+#         # print('Epoch {:03d} loss {:.4f}'.format(epoch, loss.item()))
 
 
 def set_seed(seed=42):
@@ -101,12 +101,14 @@ if __name__ == '__main__':
     # start = time.time()
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')  # Choose device based on availability
     # controller = Controller('opsahl-ucsocial/test', device)
-    # file_name = 'NEMData/network_1/no_repair/networking_1_modify_by_cgn__train_data__2024-06-25 214959.xlsx'
-    file_name = 'NEMData/network_1/repair/networking_1_modify_by_cgn__train_data__with_sequence.xlsx'
-    adj_file = 'NEMData/network_1/no_repair/zx_network_1_dataset_adj_matrix.npy'
-    feature_file = 'NEMData/network_1/no_repair/networking_1_modify_by_cgn__feature_data__2024-06-24 205501.xlsx'
+    # file_name = 'NEMData/network_1/repair/networking_1_modify_by_cgn__train_data__with_sequence.xlsx'
+    # adj_file = 'NEMData/network_1/no_repair/zx_network_1_dataset_adj_matrix.npy'
+    # feature_file = 'NEMData/network_1/no_repair/networking_1_modify_by_cgn__feature_data__2024-06-24 205501.xlsx'
 
-    controller = Controller(file_name, device, adj_file, feature_file, "NEM")
+    file_name = 'NEMData/network_1/repair/networking_1_modify_by_cgn__train_data__2024-09-01 123131.xlsx'
+    adj_file = 'NEMData/network_1/repair/networking_1_modify_by_cgn__train_data__topology2024-09-01 123131.json'
+
+    controller = Controller(file_name, device, adj_file, "NEM")
     # controller.train()
     feature, adjs, label = controller.clean_data(saved=False)
     controller.use_cleaned_data_split(device, feature, adjs, label, controller.ds.sequence_info)

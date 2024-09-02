@@ -214,14 +214,22 @@ class DataSplit:
     def build_sparse_matrix(self, adj_list: list, test_mode=False):
         adj_sparse_list = list()
         for adj in adj_list:
-            if not test_mode:
-                idx = adj.get("idx")[0]
-                val = adj.get("value")[0]
+            if isinstance(adj, list):
+                adj_sparse = list()
+                for seq_adj in adj:
+                    idx = seq_adj.get("idx")[0]
+                    val = seq_adj.get("value")[0]
+                    seq_adj_sparse = torch.sparse_coo_tensor(idx, val, self.size, dtype=torch.float32).to(self.device)
+                    adj_sparse.append(seq_adj_sparse)
             else:
-                idx = adj.get("idx")
-                val = adj.get("value")
-            adj_sparse = torch.sparse_coo_tensor(idx, val, self.size, dtype=torch.float32)
-            adj_sparse_list.append(adj_sparse.to(self.device))
+                if not test_mode:
+                    idx = adj.get("idx")[0]
+                    val = adj.get("value")[0]
+                else:
+                    idx = adj.get("idx")
+                    val = adj.get("value")
+                adj_sparse = torch.sparse_coo_tensor(idx, val, self.size, dtype=torch.float32).to(self.device)
+            adj_sparse_list.append(adj_sparse)
         return adj_sparse_list
 
     def get_test_data_feature(self):

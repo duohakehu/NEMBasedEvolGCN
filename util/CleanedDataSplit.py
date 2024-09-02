@@ -111,39 +111,94 @@ class CleanedDatasetSplit(Dataset):
 
         for i in range(idx - self.lstm_window, idx):
             mask.append(i)
-            adj_sample.append(self.adjs[i])
             if self.extra is None:
                 feature_sample.append(self.feature[i])
             else:
                 sub_feature_sequence.clear()
-                adj_sparse = self.change_sparse_matrix(self.adjs[i])
-                cur_graph = nx.from_scipy_sparse_array(adj_sparse)
+                # 将字符串流base64解码为二进制，并转换为邻接矩阵，得到当前的拓扑
+                cur_graph = None
+                cur_adj_list = None
+                if not isinstance(self.adjs[i], list):
+                    adj_sparse = self.change_sparse_matrix(self.adjs[i])
+                    cur_graph = nx.from_scipy_sparse_array(adj_sparse)
+                    adj_sample.append(self.adjs[i])
+                else:
+                    cur_adj_list = copy.deepcopy(self.adjs[i])
+                    cur_graph = self.get_current_graph_from_list(cur_adj_list)
+
                 com_sequence = DataUtil.get_list_from_string(self.extra[i, 0])
-                node_num = cur_graph.number_of_nodes()
-                degrees = np.array([d for n, d in cur_graph.degree()])
-                max_degree = degrees.max()
-                min_degree = 0
-                val_range = max_degree - min_degree
+
+                sparse_list = list()
+
                 for coms_item in com_sequence:
+
                     tmp_graph = copy.deepcopy(cur_graph)
-                    for com_id in coms_item:
-                        tmp_graph.remove_node(com_id)
-
+                    node_num = cur_graph.number_of_nodes()
                     cur_extra_feature = torch.zeros(node_num, 1)
-                    # 计算当前拓扑所有度的变化情况
-                    for com_id in range(0, node_num):
-                        try:
-                            cur_degree = tmp_graph.degree(com_id)
-                            cur_degree = (cur_degree - min_degree) / val_range
-                        except nx.exception.NetworkXError:
-                            cur_degree = 0
+                    for com_id in coms_item:
+                        if com_id != 'E':
+                            tmp_graph.remove_node(com_id)
+                            tmp_graph.add_node(com_id)
 
-                        cur_extra_feature[com_id] = cur_degree
+                        else:  # 说明出发了事件，需要使用当前事件对应的拓扑结构
+                            if cur_adj_list is None:
+                                print("存在错误，cur_adj_list 为 None")
+                                return -1
 
-                    # feature = torch.cat((self.feature[i], cur_extra_feature), dim=-1)
+                            cur_graph = self.get_current_graph_from_list(cur_adj_list)
+                            tmp_graph = copy.deepcopy(cur_graph)
+
+                        degrees = np.array([d for n, d in cur_graph.degree()])
+                        max_degree = degrees.max()
+                        min_degree = 0
+                        val_range = max_degree - min_degree
+
+                        # 计算当前拓扑所有度的变化情况
+                        for cid in range(0, node_num):
+                            try:
+                                cur_degree = tmp_graph.degree(cid)
+                                cur_degree = (cur_degree - min_degree) / val_range
+                            except nx.exception.NetworkXError:
+                                cur_degree = 0
+
+                            cur_extra_feature[cid] = cur_degree
+
+                        # feature = torch.cat((self.feature[i], cur_extra_feature), dim=-1)
 
                     sub_feature_sequence.append(cur_extra_feature)
+
+                    if isinstance(self.adjs[i], list):
+                        # 如果是考虑事件拓扑变化的情况，则需要在这里将图变化为稀疏矩阵
+                        tmp_coo = nx.to_scipy_sparse_array(tmp_graph, format='coo')
+
+                        values = tmp_coo.data
+                        indices = np.vstack((tmp_coo.row, tmp_coo.col))
+                        index = torch.LongTensor(indices)
+                        v = torch.LongTensor(values)
+                        # # 这里先不转换为稀疏矩阵，不然dataloader会报错
+                        edge_index = {"idx": index, "value": v}
+                        sparse_list.append(edge_index)
+
                     del tmp_graph
+
+                if isinstance(self.adjs[i], list):
+                    adj_sample.append(copy.deepcopy(sparse_list))
+
+                sparse_list.clear()
+
+                del cur_adj_list
+
+                # if isinstance(self.adjs[i], list):
+                #     # 如果是考虑事件拓扑变化的情况，则需要在这里将图变化为稀疏矩阵
+                #     tmp_coo = nx.to_scipy_sparse_array(cur_graph, format='coo')
+                #
+                #     values = tmp_coo.data
+                #     indices = np.vstack((tmp_coo.row, tmp_coo.col))
+                #     index = torch.LongTensor(indices)
+                #     v = torch.LongTensor(values)
+                #     # # 这里先不转换为稀疏矩阵，不然dataloader会报错
+                #     edge_index = {"idx": index, "value": v}
+                #     adj_sample.append(edge_index)
 
                 feature_sample.append(self.feature[i])
                 # feature_sample.append(copy.deepcopy(sub_feature_sequence))
@@ -162,3 +217,11 @@ class CleanedDatasetSplit(Dataset):
         val = adj.get("value")
         adj_sparse = sp.sparse.coo_matrix((val, idx), self.adj_size)
         return adj_sparse
+
+    def get_current_graph_from_list(self, current_adjs):
+        base64_matrix = current_adjs[0]
+        current_adjs.pop(0)
+        matrix = DataUtil.decode_matrix_from_base64(base64_matrix)
+        cur_graph = nx.from_numpy_array(matrix)
+
+        return cur_graph

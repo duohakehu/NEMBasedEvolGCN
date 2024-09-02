@@ -12,7 +12,7 @@ class PlotUtil:
         self.x_data = x_data
         self.y_data = y_data
         self.ax.set_xlim(0, 0.01)
-        self.ax.set_ylim(0, 0.2)
+        self.ax.set_ylim(0, 0.0001)
         self.ax.set_xlabel(x_label)
         self.ax.set_ylabel(y_label)
         self.ax.legend()

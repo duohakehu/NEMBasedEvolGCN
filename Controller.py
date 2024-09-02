@@ -22,7 +22,7 @@ from util.TopologyAwareDataPreSplite import TopologyAwareDataSplite
 
 class Controller:
 
-    def __init__(self, file_name, device, adj_file=None, feature_file=None, mode="UCI"):
+    def __init__(self, file_name, device, adj_file=None, feature_file=None, mode="NEM"):
         self.device = device
         self.classifier_optimizer = None
         self.egcn_optimizer = None
@@ -34,7 +34,7 @@ class Controller:
         else:
             self.ds = TopologyAwareDataSplite(file_name=file_name, lstm_window=10, device="cpu",
                                               node_feature=4, edge_feature=1, label_class=1, adj_file=adj_file,
-                                              node_num=18, edge_num=28,
+                                              node_num=27, edge_num=28,
                                               feature_file=feature_file)
 
         self.egcn = EvolGCN(self.ds.node_feature,
@@ -63,7 +63,7 @@ class Controller:
 
     def use_cleaned_data_split(self, device, feature, adjs, label, extra=None):
         self.ds = CleanedDataSplit(lstm_window=6, train=0.7, valid=0.2, device=device,
-                                   node_feature=2, edge_feature=2, label_class=1, node_num=18, edge_num=28,
+                                   node_feature=2, edge_feature=2, label_class=1, node_num=27, edge_num=28,
                                    feature=feature, adjs=adjs, label=label, extra_info=extra)
 
     # def set_seed(self, seed=42):
@@ -271,32 +271,32 @@ class Controller:
     def save(self, model_save_path):
         torch.save(self.egcn.state_dict(), model_save_path)
 
-    def test(self, model_file):
-        self.egcn.eval()
-        self.egcn.load_state_dict(torch.load(model_file))
-        adj_list, feature_list, node_mask = self.ds.get_test_data_feature()
-        adj_sparse_list = self.ds.build_sparse_matrix(adj_list, test_mode=True)
-        pre = None
-        adj = adj_sparse_list[0]
-        feature = feature_list[0]
-        softmax = nn.Softmax(dim=-1)
-        # for adj, feature in zip(adj_sparse_list[0], feature_list):
-        node_feature = self.egcn(feature, None, adj, test_mode=True)
-        edge_feature, mask = self.gather_node(node_feature, node_mask, test=True)
-        pre = softmax(edge_feature)
-        result = pre.clone().detach()
-        label = self.ds.label.reshape(-1, self.ds.label.size(-1))
-        for i in range(result.size(0)):
-            if result[i, 0] >= 0.5:
-                result[i] = torch.IntTensor([1, 0])
-            else:
-                result[i] = torch.IntTensor([0, 1])
-        self.calculate_accuracy(result, label, mask)
-
-    def calculate_accuracy(self, pred, label, mask):
-        correct = pred[mask].eq(label[mask]).sum().item() / 2
-        acc = correct / int(len(mask))
-        print('GCN Accuracy: {:.4f}'.format(acc))
+    # def test(self, model_file):
+    #     self.egcn.eval()
+    #     self.egcn.load_state_dict(torch.load(model_file))
+    #     adj_list, feature_list, node_mask = self.ds.get_test_data_feature()
+    #     adj_sparse_list = self.ds.build_sparse_matrix(adj_list, test_mode=True)
+    #     pre = None
+    #     adj = adj_sparse_list[0]
+    #     feature = feature_list[0]
+    #     softmax = nn.Softmax(dim=-1)
+    #     # for adj, feature in zip(adj_sparse_list[0], feature_list):
+    #     node_feature = self.egcn(feature, None, adj, test_mode=True)
+    #     edge_feature, mask = self.gather_node(node_feature, node_mask, test=True)
+    #     pre = softmax(edge_feature)
+    #     result = pre.clone().detach()
+    #     label = self.ds.label.reshape(-1, self.ds.label.size(-1))
+    #     for i in range(result.size(0)):
+    #         if result[i, 0] >= 0.5:
+    #             result[i] = torch.IntTensor([1, 0])
+    #         else:
+    #             result[i] = torch.IntTensor([0, 1])
+    #     self.calculate_accuracy(result, label, mask)
+    #
+    # def calculate_accuracy(self, pred, label, mask):
+    #     correct = pred[mask].eq(label[mask]).sum().item() / 2
+    #     acc = correct / int(len(mask))
+    #     print('GCN Accuracy: {:.4f}'.format(acc))
 
     # 基于NEM提供的数据集业务的连通可用度预测
     def test_avail(self, model_file):
