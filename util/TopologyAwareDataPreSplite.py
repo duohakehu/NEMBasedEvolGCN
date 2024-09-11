@@ -112,6 +112,7 @@ class TopologyAwareDataSplite:
     def get_all_data_sample(self, dataset, data_length):
         feature_sample = list()
         adj_sample = list()
+        delete_list = list()
 
         for i in range(0, data_length):
             feature = self.feature.clone()
@@ -128,7 +129,12 @@ class TopologyAwareDataSplite:
                 adj_sample.append(edge_index)
 
             else:
-                adj_sample.append(self.G.get(str(i)))
+                adj_tmp = self.G.get(str(i))
+                if adj_tmp is None:
+                    # self.all_label = np.delete(self.all_label, i, axis=0)
+                    delete_list.append(i)
+                    continue
+                adj_sample.append(adj_tmp)
 
             for node_index in range(self.node_num):
                 for feature_index in range(self.node_feature):
@@ -136,5 +142,7 @@ class TopologyAwareDataSplite:
                                                                              + feature_index)]
 
             feature_sample.append(feature)
+
+        self.all_label = np.delete(self.all_label, delete_list, axis=0)
 
         return feature_sample, adj_sample
