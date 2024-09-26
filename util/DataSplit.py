@@ -17,7 +17,7 @@ class DataSplit:
 
     # 用于读取UCI数据集的初始化方法,div是时间转化换默认s转h
     def __init__(self, file_name=None, skip_rows=0, div=3600, lstm_window=10, train=0.7, valid=0.2, device="cpu",
-                 node_feature=1, edge_feature=1, label_class=2, adj_file=None, node_num=None, edge_num=None,
+                 node_feature=1, edge_feature=1, label_class=2, adj_file=None, node_num=None, terminal_node_num=None,
                  feature_file=None):
 
         # if mode == "UCI":
@@ -62,7 +62,7 @@ class DataSplit:
         if adj_file is None:
             return
         self.node_num = node_num
-        self.edge_num = edge_num
+        self.terminal_node_num = terminal_node_num
 
         df = pd.read_excel(file_name, engine="openpyxl")
         self.data = df.to_numpy()

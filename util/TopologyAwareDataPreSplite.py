@@ -18,7 +18,8 @@ class TopologyAwareDataSplite:
 
     # 用于读取UCI数据集的初始化方法,div是时间转化换默认s转h
     def __init__(self, file_name=None, lstm_window=10, device="cpu",
-                 node_feature=1, edge_feature=1, label_class=2, adj_file=None, node_num=None, edge_num=None,
+                 node_feature=1, edge_feature=1, label_class=2, adj_file=None, dtw_file=None,
+                 node_num=None, edge_num=None,
                  feature_file=None):
 
         if adj_file is None:
@@ -30,6 +31,11 @@ class TopologyAwareDataSplite:
         else:
             with open(adj_file, 'r') as json_file:
                 self.G = json.load(json_file)
+
+        if dtw_file is not None and dtw_file.split('.')[1] == 'json':
+
+            with open(dtw_file, 'r') as d_file:
+                self.dtw_sequence_dict = json.load(d_file)
 
         self.node_num = node_num
         self.edge_num = edge_num
@@ -113,6 +119,7 @@ class TopologyAwareDataSplite:
         feature_sample = list()
         adj_sample = list()
         delete_list = list()
+        dtw_sample = list()
 
         for i in range(0, data_length):
             feature = self.feature.clone()
@@ -133,8 +140,11 @@ class TopologyAwareDataSplite:
                 if adj_tmp is None:
                     # self.all_label = np.delete(self.all_label, i, axis=0)
                     delete_list.append(i)
+                    if self.dtw_sequence_dict is not None:
+                        self.dtw_sequence_dict.pop(i, None)
                     continue
                 adj_sample.append(adj_tmp)
+                dtw_sample.append(self.dtw_sequence_dict.get(str(i)))
 
             for node_index in range(self.node_num):
                 for feature_index in range(self.node_feature):
@@ -145,4 +155,4 @@ class TopologyAwareDataSplite:
 
         self.all_label = np.delete(self.all_label, delete_list, axis=0)
 
-        return feature_sample, adj_sample
+        return feature_sample, adj_sample, dtw_sample

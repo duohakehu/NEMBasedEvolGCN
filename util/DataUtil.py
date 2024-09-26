@@ -4,6 +4,7 @@ import pickle
 import numpy as np
 import pandas as pd
 import torch
+from fastdtw import fastdtw
 
 
 class DataUtil:
@@ -93,3 +94,87 @@ class DataUtil:
         binary_matrix = base64.b64decode(bas64_str)
         matrix = pickle.loads(binary_matrix)
         return matrix
+
+    @staticmethod
+    def encode_matrix_from_base64(adj_matrix):
+        binary_matrix = pickle.dumps(adj_matrix)
+        encode_stream = base64.b64encode(binary_matrix).decode('utf-8')
+        return encode_stream
+
+    @staticmethod
+    def calculate_sequence_based_dtw(base_seq, sample_seq):
+        try:
+            distance, path = fastdtw(base_seq, sample_seq)
+        except IndexError:
+            distance = np.Inf
+        return distance
+
+    @staticmethod
+    def normalize_array_by_column(data, indexes):  # 用于多inf的array的归一化
+        for index in indexes:
+            if len(data.shape) <= 1:
+                column = data
+            else:
+                column = data[:, index]
+            column[column == np.inf] = 10
+            min_val = np.min(column)
+            max_val = np.max(column)
+            column[column == np.NAN] = max_val
+            range_vals = max_val - min_val
+            if range_vals == 0:
+                range_vals = 1
+
+            normal_col = (column - min_val) / range_vals
+            if len(data.shape) <= 1:
+                return normal_col
+            else:
+                data[:, index] = normal_col
+        return data
+
+    @staticmethod
+    def normalize_array(data):  # 用于多inf的array的归一化
+        data[data == -np.inf] = np.nan
+        data[data == np.inf] = np.nan
+        min_val = np.nanmin(data)
+        max_val = np.nanmax(data)
+        range_vals = max_val - min_val
+        if range_vals == 0:
+            range_vals = 1
+
+        normal = (data - min_val) / range_vals
+        return normal
+
+    @staticmethod
+    def normalize_tensor(data):  # 用于多inf的array的归一化
+        min_val = data.min()
+        max_val = data.max()
+        range_vals = max_val - min_val
+        if range_vals == 0:
+            range_vals = 1
+
+        normal = (data - min_val) / range_vals
+        return normal
+
+    @staticmethod
+    # 该方法用于寻找adj中最小的前N个值，并替换为二元矩阵
+    def get_bestN_index_in_matrix(adj_matrix, N):
+        # 1. 将矩阵展平为一维数组
+        flat_matrix = adj_matrix.ravel()
+
+        # 2. 忽略 NaN 值，将 NaN 替换为负无穷大，以确保 NaN 不影响排序
+        flat_matrix_no_nan = np.nan_to_num(flat_matrix, nan=np.inf)
+
+        # 3. 找到前N个最大权重的索引
+        top_N_indices = np.argsort(flat_matrix_no_nan)[:N]  # 从小到大排序
+
+        # 4. 将展平的索引还原为二维矩阵的行列索引
+        row_indices, col_indices = np.unravel_index(top_N_indices, adj_matrix.shape)
+
+        # 5. 创建一个全为0的矩阵，准备替换
+        binary_matrix = np.zeros_like(adj_matrix)
+
+        # 6. 根据前 10 个最大值的索引，将对应位置替换为 1
+        for row, col in zip(row_indices, col_indices):
+            binary_matrix[row, col] = 1
+
+        return binary_matrix

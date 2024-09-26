@@ -22,7 +22,7 @@ from util.TopologyAwareDataPreSplite import TopologyAwareDataSplite
 
 class Controller:
 
-    def __init__(self, file_name, device, adj_file=None, feature_file=None, mode="NEM"):
+    def __init__(self, file_name, device, adj_file=None, dtw_file=None, feature_file=None, mode="NEM"):
         self.device = device
         self.classifier_optimizer = None
         self.egcn_optimizer = None
@@ -34,12 +34,12 @@ class Controller:
         else:
             self.ds = TopologyAwareDataSplite(file_name=file_name, lstm_window=10, device="cpu",
                                               node_feature=4, edge_feature=1, label_class=1, adj_file=adj_file,
-                                              node_num=27, edge_num=28,
-                                              feature_file=feature_file)
+                                              node_num=36, edge_num=28,
+                                              feature_file=feature_file, dtw_file=dtw_file)
 
         self.egcn = EvolGCN(self.ds.node_feature,
                             self.ds.node_feature, 64, 1, 1,
-                            self.device, self.ds.node_num, self.ds.node_extra_feature).to(self.device)
+                            self.device, self.ds.node_num, 2).to(self.device)
         # 如果是链路预测，这里的参数又不一样
         # self.classifier = Classifier(2, 1).to(device)
         # self.predict = Predict(self.ds.node_num, 1).to(self.device)
@@ -61,10 +61,10 @@ class Controller:
 
         return ds
 
-    def use_cleaned_data_split(self, device, feature, adjs, label, extra=None):
+    def use_cleaned_data_split(self, device, feature, adjs, label, extra=None, dtws=None):
         self.ds = CleanedDataSplit(lstm_window=6, train=0.7, valid=0.2, device=device,
-                                   node_feature=2, edge_feature=2, label_class=1, node_num=27, edge_num=28,
-                                   feature=feature, adjs=adjs, label=label, extra_info=extra)
+                                   node_feature=4, edge_feature=2, label_class=1, node_num=36, terminal_node_num=8,
+                                   feature=feature, adjs=adjs, label=label, extra_info=extra, dtws=dtws)
 
     # def set_seed(self, seed=42):
     #     random.seed(seed)
@@ -330,7 +330,7 @@ class Controller:
 
     def clean_data(self, saved=True):
         outliers_list = list()
-        feature, adjs = self.ds.get_all_data_sample(self.ds.data, self.ds.data.shape[0])
+        feature, adjs, dtws = self.ds.get_all_data_sample(self.ds.data, self.ds.data.shape[0])
         data = DataUtil.pre_deal_feature(feature)
         y = self.ds.all_label.reshape(-1, 1)
         dbscan = DBSCAN(eps=0.2, min_samples=2)
@@ -356,4 +356,4 @@ class Controller:
             DataUtil.save_cleaned_data(feature, new_label, "./output/cleaned_data_" + str(time.time()) + ".xlsx")
             DataUtil.save_file_by_byte(adjs, "./output/cleaned_adj_" + str(time.time()) + ".xlsx")
 
-        return feature, adjs, new_label
+        return feature, adjs, new_label, dtws

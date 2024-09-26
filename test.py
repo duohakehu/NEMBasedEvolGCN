@@ -14,10 +14,15 @@ if __name__ == '__main__':
     # file_name = 'NEMData/network_1/repair/networking_1_modify_by_cgn__train_data__with_sequence.xlsx'
     # adj_file = 'NEMData/network_1/no_repair/zx_network_1_dataset_adj_matrix.npy'
 
-    file_name = 'NEMData/network_1/repair/networking_1_modify_by_cgn__train_data__2024-09-01 123131.xlsx'
-    adj_file = 'NEMData/network_1/repair/networking_1_modify_by_cgn__train_data__topology2024-09-01 123131.json'
-    controller = Controller(file_name, device, adj_file, None, "NEM")
-    feature, adjs, label = controller.clean_data(saved=False)
+    # file_name = 'NEMData/network_1/repair/networking_1_modify_by_cgn__train_data__2024-09-01 123131.xlsx'
+    # adj_file = 'NEMData/network_1/repair/networking_1_modify_by_cgn__train_data__topology2024-09-01 123131.json'
+
+    file_name = 'NEMData/network_1/repair/networking_1_modify_by_cgn__train_data__2024-09-22 133226.xlsx'
+    adj_file = 'NEMData/network_1/repair/networking_1_modify_by_cgn__train_data__topology2024-09-22 133226.json'
+    dtw_file = 'NEMData/network_1/repair/networking_1_modify_by_cgn__train_data__dtw2024-09-22 133226.json'
+
+    controller = Controller(file_name, device, adj_file, dtw_file, "NEM")
+    feature, adjs, label, dtws = controller.clean_data(saved=False)
     # controller.use_cleaned_data_split(device, feature, adjs, label)
-    controller.use_cleaned_data_split(device, feature, adjs, label, controller.ds.sequence_info)
+    controller.use_cleaned_data_split(device, feature, adjs, label, controller.ds.sequence_info, dtws)
     controller.test_avail("./output/model_after_epoch_10000.pt")

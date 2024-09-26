@@ -105,15 +105,16 @@ if __name__ == '__main__':
     # adj_file = 'NEMData/network_1/no_repair/zx_network_1_dataset_adj_matrix.npy'
     # feature_file = 'NEMData/network_1/no_repair/networking_1_modify_by_cgn__feature_data__2024-06-24 205501.xlsx'
 
-    file_name = 'NEMData/network_1/repair/networking_1_modify_by_cgn__train_data__2024-09-01 123131.xlsx'
-    adj_file = 'NEMData/network_1/repair/networking_1_modify_by_cgn__train_data__topology2024-09-01 123131.json'
+    file_name = 'NEMData/network_1/repair/networking_1_modify_by_cgn__train_data__2024-09-25 154751.xlsx'
+    adj_file = 'NEMData/network_1/repair/networking_1_modify_by_cgn__train_data__topology2024-09-25 154751.json'
+    dtw_file = 'NEMData/network_1/repair/networking_1_modify_by_cgn__train_data__dtw2024-09-25 154751.json'
 
-    controller = Controller(file_name, device, adj_file, "NEM")
+    controller = Controller(file_name, device, adj_file, dtw_file, mode="NEM")
     # controller.train()
-    feature, adjs, label = controller.clean_data(saved=False)
-    controller.use_cleaned_data_split(device, feature, adjs, label, controller.ds.sequence_info)
+    feature, adjs, label, dtws = controller.clean_data(saved=False)
+    controller.use_cleaned_data_split(device, feature, adjs, label, controller.ds.sequence_info, dtws)
     # 备选1：3.5249975523875253e-06 备选2：0.00463291230159753
-    controller.train_avail(test_loss=False, lr=0.01)
+    controller.train_avail(test_loss=False, lr=0.0095)
     # data, num_node_features, num_classes = load_data('Cora', device)
     # ds = load_UCIsocial_data('opsahl-ucsocial/out.opsahl-ucsocial', device)
     # ds = load_UCIsocial_data('opsahl-ucsocial/test', device)
