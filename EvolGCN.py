@@ -3,7 +3,8 @@ import copy
 import torch
 from torch import nn
 from torch.nn import LSTM, RReLU, Linear, AdaptiveAvgPool1d, ReLU
-from torch_geometric.nn import GCNConv, MLP, GATConv
+from torch_geometric.nn import GCNConv, MLP, ChebConv, GATConv
+from torch_geometric.utils import dense_to_sparse
 
 from Classifier import Predict
 from util.DataUtil import DataUtil
@@ -25,7 +26,7 @@ class EvolGCN(nn.Module):
         self.emb_mlp = MLP(in_channels=hidden_dim, out_channels=node_num, hidden_channels=hidden_dim,
                            num_layers=num_layers)
         # self.weight = nn.Embedding(num_embeddings= input_data_size, embedding_dim=input_dim).weight.data
-        self.gcn_conv = GCNConv(input_dim + extra_dim, output_dim + extra_dim)
+        self.gcn_conv = ChebConv(input_dim + extra_dim, output_dim + extra_dim, K=1)
         self.pre_lstm_conv = GCNConv(extra_dim, extra_dim)
         # self.gcn_conv.reset_parameters()  # 初始化权重
         # self.weight = self.gcn_conv.lin.weight.data.to(self.device)
@@ -37,7 +38,7 @@ class EvolGCN(nn.Module):
         # self.feature_linear = nn.Linear(in_features=input_dim * 2, out_features=output_dim)
         self.lin = nn.Linear(input_dim + extra_dim, input_dim + extra_dim)
         # self.lin_p = nn.Linear(node_num, num_class)
-        self.predict = Predict((input_dim + extra_dim)*node_num, num_class)
+        self.predict = Predict((input_dim + extra_dim) * node_num, num_class)
         # 全局池化
         self.global_avg_pool = AdaptiveAvgPool1d(num_class)
         self.extra_dim = extra_dim
@@ -266,6 +267,19 @@ class EvolGCN(nn.Module):
         return data_list
 
     def forward(self, fea, edge_list, extra_fea=None):
+        # dense_edge_list = list()
+        #
+        # for dense_edge in edge_list:
+        #     tmp = list()
+        #     for tmp_tensor in dense_edge:
+        #         tmp_tensor = tmp_tensor.to_dense()
+        #         tmp_tensor.to(torch.int64)
+        #         tmp_tensor = dense_to_sparse(tmp_tensor)
+        #         tmp.append(tmp_tensor)
+        #
+        #     dense_edge_list.append(tmp)
+        #
+        # edge_list = dense_edge_list
 
         result = list()
         for feature_data in fea:
@@ -325,13 +339,16 @@ class EvolGCN(nn.Module):
         pass
 
     def gcn(self, x, edge_index):
-
+        # 这是需要使用Cheb，所提要调整稀疏矩阵的格式，不然会报错
+        tmp_tensor = edge_index.to_dense()
+        tmp_tensor.to(torch.int64)
+        edge_index = dense_to_sparse(tmp_tensor)
         x = self.lin(x)
 
-        x = self.gcn_conv(x, edge_index)
+        x = self.gcn_conv(x, edge_index[0], edge_index[1])
         # x = self.rreLu(x)
         # x = self.reLu(x)
-        x = self.gcn_conv(x, edge_index)
+        x = self.gcn_conv(x, edge_index[0], edge_index[1])
         x = self.cmlp(x)
         x = self.lin(x)
         return x

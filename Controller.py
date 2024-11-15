@@ -186,7 +186,7 @@ class Controller:
                             valid_loss += valid_loss.item()
 
                         valid_loss = valid_loss / len(self.ds.valid_dataLoader)
-                        print('Epoch {:03d} Training loss {:.6f} Valid loss {:.6f} Patience {:03d}'
+                        print('Epoch {:03d} Training loss {:.8f} Valid loss {:.10f} Patience {:03d}'
                               .format(epoch, train_loss, valid_loss, patience - epoch_no_improve))
                         if best_loss > valid_loss:
                             best_loss = valid_loss
@@ -322,7 +322,7 @@ class Controller:
         label = self.ds.test_label
         label = label.reshape(label.size(-1), -1)
         result = torch.tensor(out_list).reshape(-1, 1).to(device=self.device).requires_grad_(False)
-        writer = pd.ExcelWriter("./output/result_compare.xlsx")
+        writer = pd.ExcelWriter("output/result_compare.xlsx")
         label = label[mask_list, :]
         df = pd.DataFrame({"result": result[:, 0], "label": label[:, 0]})
         df.to_excel(writer, index=False)

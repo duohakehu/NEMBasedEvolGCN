@@ -1,10 +1,15 @@
 import base64
 import pickle
+import traceback
 
 import numpy as np
 import pandas as pd
 import torch
 from fastdtw import fastdtw
+from tslearn.clustering import KShape
+from tslearn.preprocessing import TimeSeriesScalerMeanVariance
+
+from extral.MAD import MAD
 
 
 class DataUtil:
@@ -110,6 +115,83 @@ class DataUtil:
         return distance
 
     @staticmethod
+    def calculate_sequence_based_mad(base_seq, sample_seq):
+        mad = MAD(
+            additional_cost=None,
+            alpha=0.1,
+            beta=0.01,
+            first_step_DTW=False)
+        try:
+            mad.fit(X_source=base_seq.transpose(1, 2))
+            Cost_OT, score_OT, all_iteration_time = mad.run_for_output(X_target=sample_seq.transpose(1, 2))
+            distance = score_OT
+            # print('OT=' + str(mad.OT))
+            # print('Cost_OT=' + str(Cost_OT))
+            print('score_OT=' + str(score_OT))
+        except IndexError as e:
+            print(e)
+            traceback.print_exc()
+            distance = np.Inf
+        return distance
+
+    @staticmethod
+    def calculate_sequence_based_kshape(data, n_clusters):
+        time_series = TimeSeriesScalerMeanVariance().fit_transform(data)
+        ks = KShape(n_clusters=n_clusters, verbose=True).fit(time_series)
+        dists = ks._cross_dists(time_series)
+        labels = ks.predict(time_series)
+        return dists, labels
+
+    # 这个方法为了解决kshape没法识别较大的时间漂移，首先引入了ERP(Edit distance with Real Penalty)使的时间序列进行非线性对齐，
+    # 解决时间漂移的问题之后在通过shape进行聚类
+    @staticmethod
+    def calculate_sequence_based_kshape_with_ERP(data, n_clusters):
+        aligned_data = [DataUtil.align_series_with_erp(data[0], ts, gap_penalty=0.5) for ts in data]
+
+        # 转换为适合 k-Shape 的格式
+        aligned_data = np.array(aligned_data).reshape(len(aligned_data), -1, 1)
+
+        time_series = TimeSeriesScalerMeanVariance().fit_transform(aligned_data)
+        ks = KShape(n_clusters=n_clusters, verbose=True).fit(time_series)
+        dists = ks._cross_dists(time_series)
+        labels = ks.predict(time_series)
+        return dists, labels
+
+    @staticmethod
+    def align_series_with_erp(reference_series, target_series, gap_penalty=0.5):
+        """实现使用 ERP 对齐目标序列到参考序列的功能"""
+        n = len(reference_series)
+        m = len(target_series)
+
+        # 初始化累积距离矩阵
+        dp = np.zeros((n + 1, m + 1))
+        dp[:, 0] = np.arange(n + 1) * gap_penalty
+        dp[0, :] = np.arange(m + 1) * gap_penalty
+
+        # 填充累积距离矩阵
+        for i in range(1, n + 1):
+            for j in range(1, m + 1):
+                cost = abs(reference_series[i - 1] - target_series[j - 1])
+                dp[i, j] = min(dp[i - 1, j] + gap_penalty,  # 删除
+                               dp[i, j - 1] + gap_penalty,  # 插入
+                               dp[i - 1, j - 1] + cost)  # 匹配
+
+        # 回溯路径进行对齐
+        aligned_series = np.zeros_like(reference_series)
+        i, j = n, m
+        while i > 0 and j > 0:
+            if dp[i, j] == dp[i - 1, j - 1] + abs(reference_series[i - 1] - target_series[j - 1]):
+                aligned_series[i - 1] = target_series[j - 1]
+                i -= 1
+                j -= 1
+            elif dp[i, j] == dp[i - 1, j] + gap_penalty:
+                i -= 1
+            else:
+                j -= 1
+
+        return aligned_series
+
+    @staticmethod
     def normalize_array_by_column(data, indexes):  # 用于多inf的array的归一化
         for index in indexes:
             if len(data.shape) <= 1:
@@ -173,7 +255,7 @@ class DataUtil:
         # 5. 创建一个全为0的矩阵，准备替换
         binary_matrix = np.zeros_like(adj_matrix)
 
-        # 6. 根据前 10 个最大值的索引，将对应位置替换为 1
+        # 6. 根据前 N 个最大值的索引，将对应位置替换为 1
         for row, col in zip(row_indices, col_indices):
             binary_matrix[row, col] = 1
 

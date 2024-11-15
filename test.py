@@ -17,9 +17,9 @@ if __name__ == '__main__':
     # file_name = 'NEMData/network_1/repair/networking_1_modify_by_cgn__train_data__2024-09-01 123131.xlsx'
     # adj_file = 'NEMData/network_1/repair/networking_1_modify_by_cgn__train_data__topology2024-09-01 123131.json'
 
-    file_name = 'NEMData/network_1/repair/networking_1_modify_by_cgn__train_data__2024-09-22 133226.xlsx'
-    adj_file = 'NEMData/network_1/repair/networking_1_modify_by_cgn__train_data__topology2024-09-22 133226.json'
-    dtw_file = 'NEMData/network_1/repair/networking_1_modify_by_cgn__train_data__dtw2024-09-22 133226.json'
+    file_name = 'NEMData/network_1/repair/networking_1_modify_by_cgn__train_data__2024-09-25 154751.xlsx'
+    adj_file = 'NEMData/network_1/repair/networking_1_modify_by_cgn__train_data__topology2024-09-25 154751.json'
+    dtw_file = 'NEMData/network_1/repair/networking_1_modify_by_cgn__train_data__dtw2024-09-25 154751.json'
 
     controller = Controller(file_name, device, adj_file, dtw_file, "NEM")
     feature, adjs, label, dtws = controller.clean_data(saved=False)

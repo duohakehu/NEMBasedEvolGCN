@@ -1,6 +1,7 @@
 import concurrent.futures
 import copy
 import json
+from functools import partial
 
 import networkx as nx
 import numpy as np
@@ -9,6 +10,8 @@ import torch
 from scipy.sparse import coo_matrix
 from torch.utils.data import DataLoader, Dataset
 
+from entity.TimeSeriesCluster import TimeSeriesCluster
+from extral.MAD import MAD
 from util.DataSplit import DataSplit
 from util.DataUtil import DataUtil
 from util.ExcelUtil import ExcelUtil
@@ -34,7 +37,7 @@ class CleanedDataSplit(DataSplit):
         self.device = device
         self.node_num = node_num
         self.terminal_node_num = terminal_node_num
-        self.p = 0.4
+        self.p = 0.1  # 当前最优：0.06
         end = int(data_length * train)
 
         # 这里是object对象，需要修改为float32
@@ -52,7 +55,7 @@ class CleanedDataSplit(DataSplit):
         train_dtws_matrixs = None
         if dtws is not None:
             # 初始化dtw序列，计算不同数据样本构件序列的dtw值，并且归一化
-            dtws_matrixs = self.get_matrix_list_with_thread_pool(dtws, need_saved=False)
+            dtws_matrixs = self.get_matrix_list_with_thread_pool(dtws, need_saved=True)
             train_dtws = [dtws[i] for i in range(start, end)]
             train_dtws_matrixs = [dtws_matrixs[i] for i in range(start, end)]
 
@@ -125,6 +128,74 @@ class CleanedDataSplit(DataSplit):
 
         return dtw_adj
 
+    # 这里用的是考虑时间漂移的时间规整匹配算法，相比于dtw能匹配多维度，且考虑时间分布的漂移存在的影响
+    def get_mad_feature_matrix(self, dtw, add_dim=1):
+
+        dtw_adj = np.zeros((self.node_num, self.node_num), dtype=np.float32)
+        for xid in range(self.node_num):
+            for yid in range(xid + 1):
+                if xid >= self.node_num - self.terminal_node_num or xid == yid:
+                    distance = np.nan
+                else:
+                    x_seq = dtw.get(str(xid))
+                    x_seq = torch.tensor(x_seq, dtype=torch.float32)
+                    x_seq = x_seq.view(-1, add_dim, x_seq.size(0))
+                    y_seq = dtw.get(str(yid))
+                    y_seq = torch.tensor(y_seq, dtype=torch.float32)
+                    y_seq = y_seq.view(-1, add_dim, y_seq.size(0))
+                    distance = DataUtil.calculate_sequence_based_mad(x_seq, y_seq)
+                dtw_adj[xid][yid] = distance
+                dtw_adj[yid][xid] = distance
+
+        dtw_adj = DataUtil.normalize_array(dtw_adj)
+        dtw_adj = DataUtil.get_bestN_index_in_matrix(dtw_adj, int(self.node_num * self.node_num * self.p))
+        print('算好啦!!!')
+
+        return dtw_adj
+
+    def get_k_shape_feature_matrix(self, dtw, n_clustering):
+        time_series = list()
+        dtw_adj = np.zeros((self.node_num, self.node_num), dtype=np.float32)
+        for xid in range(self.node_num - self.terminal_node_num):
+            time_series.append(dtw.get(str(xid)))
+        time_series = np.array(time_series)
+        # distances, labels = DataUtil.calculate_sequence_based_kshape(time_series, n_clustering)
+        distances, labels = DataUtil.calculate_sequence_based_kshape_with_ERP(time_series, n_clustering)
+
+        clustering_dict = dict()
+        for i in range(len(distances)):
+            label = labels[i]
+            current_label_list = clustering_dict.get(label)
+            if current_label_list is None:
+                current_label_list = list()
+                clustering_dict.setdefault(label, current_label_list)
+
+            current_label_list.append(TimeSeriesCluster(i, distances[i][labels[i]]))
+
+        for xid in range(self.node_num):
+            if xid >= self.node_num - self.terminal_node_num:
+                for yid in range(0, self.node_num):
+                    distance = 0
+                    dtw_adj[xid][yid] = distance
+                    dtw_adj[yid][xid] = distance
+            dtw_adj[xid][xid] = 0
+
+        for label in clustering_dict.keys():
+            clustering = clustering_dict.get(label)
+            for x in range(len(clustering)):
+                for y in range(x+1, len(clustering)):
+                    x_obj = clustering[x]
+                    y_obj = clustering[y]
+                    # distance = (x_obj.distance + y_obj.distance)/2
+                    dtw_adj[x_obj.index][y_obj.index] = 1
+                    dtw_adj[y_obj.index][x_obj.index] = 1
+
+        # dtw_adj = DataUtil.normalize_array(dtw_adj)
+        # dtw_adj = DataUtil.get_bestN_index_in_matrix(dtw_adj, int(self.node_num * self.node_num * self.p))
+        print('算好啦!!!')
+
+        return dtw_adj
+
     def get_matrix_list_with_thread_pool(self, dtws, need_saved=False):
         results = None
         try:
@@ -138,9 +209,10 @@ class CleanedDataSplit(DataSplit):
                 return results
         except FileNotFoundError:
             print("没有文件缓存，需要设置need_saved=true重新缓存文件")
-
+            # self.get_k_shape_feature_matrix(dtws[0], int(self.node_num/7))
             with concurrent.futures.ProcessPoolExecutor(max_workers=15) as executor:
-                results = list(executor.map(self.get_dtws_feature_matrix, dtws))
+                func_with_n = partial(self.get_k_shape_feature_matrix, n_clustering=int(self.node_num/7))
+                results = list(executor.map(func_with_n, dtws))
                 if need_saved:
                     tmp_datas = list()
                     for result in results:
@@ -172,14 +244,6 @@ class CleanedDatasetSplit(Dataset):
     def __getitem__(self, idx):
         sample = self.get_samlpe(idx + self.lstm_window)
         return sample
-
-    # def get_list_from_string(self, content: str):
-    #     edg_list = list()
-    #     tmp = content.replace('[(', '').replace(')]', '').replace('), (', '-')
-    #     for item in tmp.split('-'):
-    #         item_tuple = tuple(map(np.int32, item.split(', ')))
-    #         edg_list.append(item_tuple)
-    #     return edg_list
 
     def get_samlpe(self, idx):
         feature_sample = list()

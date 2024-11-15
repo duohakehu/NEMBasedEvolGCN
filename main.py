@@ -113,14 +113,13 @@ if __name__ == '__main__':
     # controller.train()
     feature, adjs, label, dtws = controller.clean_data(saved=False)
     controller.use_cleaned_data_split(device, feature, adjs, label, controller.ds.sequence_info, dtws)
-    # 备选1：3.5249975523875253e-06 备选2：0.00463291230159753
-    controller.train_avail(test_loss=False, lr=0.0095)
+    controller.train_avail(test_loss=False, lr=0.01)  # 0.0095
     # data, num_node_features, num_classes = load_data('Cora', device)
     # ds = load_UCIsocial_data('opsahl-ucsocial/out.opsahl-ucsocial', device)
     # ds = load_UCIsocial_data('opsahl-ucsocial/test', device)
     # egcn = EvolGCN(ds.node_feature, ds.node_feature, 64, 1, device).to(device)
     # classifier = Classifier(ds.edge_feature, 2).to(device)
-    # run_epocch(egcn, classifier, ds, device)
+    # run_epocch(egcn, classifier, dsf, device)
 
     # x = torch.randn(5, 16, device=device)  # Example node features
     # edge_index = torch.tensor([[0, 1, 1, 2, 2, 3, 3, 4],
